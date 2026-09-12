@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dataset
+data/raw/*
+data/intermediate/*
+data/processed/*
+data/output/*
+
+# Keep directory structure
+!data/raw/.gitkeep
+!data/intermediate/.gitkeep
+!data/processed/.gitkeep
+!data/output/.gitkeep
+
+# Models / checkpoints
+checkpoints/
+models/
+*.pt
+*.pth
+*.ckpt
+
+# Logs
+logs/
+*.log
+
+# Notebook
+.ipynb_checkpoints/
