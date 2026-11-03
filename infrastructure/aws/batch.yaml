@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Optional AWS Batch Fargate execution for the synthetic research pipeline
+Parameters:
+  DataBucketName:
+    Type: String
+    Description: BucketName output from core.yaml
+  ContainerImage:
+    Type: String
+    Description: Full ECR image URI with an immutable commit SHA tag (not latest)
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets with internet gateway route for Fargate to pull ECR image
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security group allowing outbound HTTPS
+Resources:
+  JobLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  JobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SyntheticDataUpload
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${DataBucketName}/experiments/mock/*"
+  ResearchComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    Properties:
+      Type: MANAGED
+      State: ENABLED
+      ComputeResources:
+        Type: FARGATE
+        MaxvCpus: 4
+        Subnets: !Ref SubnetIds
+        SecurityGroupIds: !Ref SecurityGroupIds
+  ResearchJobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      State: ENABLED
+      Priority: 1
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref ResearchComputeEnvironment
+  ResearchJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      Type: container
+      PlatformCapabilities: [FARGATE]
+      RetryStrategy:
+        Attempts: 1
+      Timeout:
+        AttemptDurationSeconds: 1800
+      ContainerProperties:
+        Image: !Ref ContainerImage
+        ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+        JobRoleArn: !GetAtt JobRole.Arn
+        ResourceRequirements:
+          - Type: VCPU
+            Value: "1"
+          - Type: MEMORY
+            Value: "2048"
+        NetworkConfiguration:
+          AssignPublicIp: ENABLED
+        FargatePlatformConfiguration:
+          PlatformVersion: LATEST
+        Command:
+          - python
+          - -m
+          - research_cli
+          - run-demo
+          - --articles
+          - "100"
+          - --comments
+          - "1000"
+          - --s3-bucket
+          - !Ref DataBucketName
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref JobLogGroup
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: m2-research
+Outputs:
+  JobQueue:
+    Value: !Ref ResearchJobQueue
+  JobDefinition:
+    Value: !Ref ResearchJobDefinition

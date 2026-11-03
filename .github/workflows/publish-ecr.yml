@@ -1,0 +1,44 @@
+name: Publish research container to ECR
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check repository configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
+        run: |
+          test -n "$AWS_ROLE_ARN" || { echo 'Set variable AWS_ROLE_ARN'; exit 1; }
+          test -n "$AWS_REGION" || { echo 'Set variable AWS_REGION'; exit 1; }
+          test -n "$AWS_ECR_REPOSITORY" || { echo 'Set variable AWS_ECR_REPOSITORY'; exit 1; }
+      - uses: actions/checkout@v4
+      - name: Configure short-lived AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image (not run jobs)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          IMAGE="$REGISTRY/$REPOSITORY"
+          docker build --label "org.opencontainers.image.revision=$COMMIT_SHA" -t "$IMAGE:$COMMIT_SHA" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$COMMIT_SHA"
+          docker push "$IMAGE:latest"
+          echo "Published $IMAGE:$COMMIT_SHA"

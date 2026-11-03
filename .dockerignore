@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+__pycache__
+**/__pycache__
+.pytest_cache
+data
+output
+*.parquet
+*.csv
+*.jsonl
+.env
+.env.*
+docs
+infrastructure
+tests

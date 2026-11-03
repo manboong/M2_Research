@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: M2 Research foundational S3, ECR, and least-privilege GitHub OIDC publish role
+Parameters:
+  GitHubSubject:
+    Type: String
+    Description: Exact OIDC sub claim for the main branch (immutable default for new GitHub repos)
+    Default: "repo:manboong@50673420/M2_Research@1362711483:ref:refs/heads/main"
+Resources:
+  ResearchBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+  ContainerRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: m2-research
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE
+      EncryptionConfiguration:
+        EncryptionType: AES256
+  GitHubPublishRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Push M2 Research container images only from GitHub main via OIDC
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                "token.actions.githubusercontent.com:sub": !Ref GitHubSubject
+      Policies:
+        - PolicyName: EcrPublishOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !GetAtt ContainerRepository.Arn
+Outputs:
+  BucketName:
+    Value: !Ref ResearchBucket
+  EcrRepositoryUri:
+    Value: !GetAtt ContainerRepository.RepositoryUri
+  GitHubRoleArn:
+    Value: !GetAtt GitHubPublishRole.Arn
