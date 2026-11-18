@@ -36,5 +36,10 @@ models/
 logs/
 *.log
 
+# Local research exports and run artifacts
+outputs/
+*.egg-info/
+.pytest_cache/
+
 # Notebook
 .ipynb_checkpoints/

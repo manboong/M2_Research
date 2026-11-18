@@ -1,0 +1,5 @@
+publisher_id,article_id,comment_id,stance,hostility
+p1,a1,c3,support,no
+p1,a1,c4,oppose,no
+p1,a1,c5,oppose,yes
+p1,a3,c2,unclear,unknown
